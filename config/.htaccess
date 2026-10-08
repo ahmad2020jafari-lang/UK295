@@ -1,0 +1,2 @@
+# Konfigurationsdateien dürfen nie über den Browser abrufbar sein.
+Require all denied
