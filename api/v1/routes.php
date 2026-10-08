@@ -18,10 +18,15 @@ function dispatch(string $method, string $path, mysqli $db, array $config): void
 
     $authController = new AuthController(new User($db), $config['jwt']);
     $categoryController = new CategoryController($categoryModel);
+    $productController = new ProductController(new Product($db), $categoryModel);
 
     // [Methode, Pfad, Controller-Methode, öffentlich?]
     $routes = [
         ['POST',   '/authenticate',             [$authController, 'authenticate'],       true],
+        ['GET',    '/products',                 [$productController, 'list'],            false],
+        ['PUT',    '/product/{sku}',            [$productController, 'createOrUpdate'],  false],
+        ['GET',    '/product/{sku}',            [$productController, 'get'],             false],
+        ['DELETE', '/product/{sku}',            [$productController, 'delete'],          false],
 
         ['GET',    '/categories',               [$categoryController, 'list'],           false],
         ['POST',   '/category',                 [$categoryController, 'create'],         false],
