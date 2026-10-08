@@ -1,0 +1,662 @@
+openapi: 3.0.3
+
+info:
+  title: Shop REST API
+  version: 1.0.0
+  description: |
+    REST API zur Verwaltung von Produkten und Kategorien eines Online-Shops
+    (Projekt üK295 LB1).
+
+    **Authentifizierung**
+
+    Alle Endpoints ausser `POST /authenticate` sind mit einem JSON Web Token (JWT)
+    geschützt. Ablauf:
+
+    1. `POST /authenticate` mit Benutzername und Passwort aufrufen.
+    2. Die Antwort enthält das Token im Feld `token`. Zusätzlich wird es als
+       HttpOnly-Cookie `token` gesetzt.
+    3. Bei allen weiteren Requests das Token als Header
+       `Authorization: Bearer <token>` mitschicken. Alternativ reicht das Cookie,
+       das Browser und Bruno automatisch mitsenden.
+
+    Ein Token ist eine Stunde gültig.
+
+    **Datenformat**
+
+    Requests und Responses verwenden JSON (`Content-Type: application/json`).
+    Die Typen werden streng geprüft: `"stock": 3` ist gültig, `"stock": "3"` nicht.
+
+    **Fehler**
+
+    Fehler haben immer die Form `{"error": "..."}`. Bei Validierungsfehlern
+    kommt zusätzlich `details` mit einer Meldung pro Feld dazu.
+    Wird ein bekannter Pfad mit einer falschen Methode aufgerufen, antwortet die
+    API mit `405 Method Not Allowed`, unbekannte Pfade mit `404 Not Found`.
+
+servers:
+  - url: http://localhost/api/v1
+    description: Lokale XAMPP-Installation
+
+tags:
+  - name: Authentifizierung
+    description: Login und Ausgabe des JWT
+  - name: Produkte
+    description: Produkte erstellen, lesen, ändern, löschen und auflisten
+  - name: Kategorien
+    description: Kategorien erstellen, lesen, ändern, löschen und auflisten
+
+# Gilt für alle Endpoints, ausser es wird beim Endpoint überschrieben.
+# Zwei Einträge bedeuten: Header ODER Cookie reicht.
+security:
+  - bearerAuth: []
+  - cookieAuth: []
+
+paths:
+  /authenticate:
+    post:
+      tags: [Authentifizierung]
+      summary: Anmelden und JWT erhalten
+      description: |
+        Prüft Benutzername und Passwort. Bei Erfolg wird ein JWT zurückgegeben
+        und als Cookie `token` gesetzt. Dieser Endpoint ist als einziger ohne
+        Token erreichbar.
+      operationId: authenticate
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Credentials'
+            example:
+              username: admin
+              password: 'sec!ReT423*&'
+      responses:
+        '200':
+          description: Anmeldung erfolgreich
+          headers:
+            Set-Cookie:
+              description: Das Token als HttpOnly-Cookie (Pfad /api/v1)
+              schema:
+                type: string
+                example: token=eyJhbGciOiJIUzI1NiIs...; Path=/api/v1; HttpOnly; SameSite=Strict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Token'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Benutzername oder Passwort falsch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Invalid username or password
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /products:
+    get:
+      tags: [Produkte]
+      summary: Alle Produkte auflisten
+      description: Gibt alle Produkte zurück, sortiert nach `product_id`.
+      operationId: listProducts
+      responses:
+        '200':
+          description: Liste aller Produkte (leer, wenn keine vorhanden sind)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Product'
+              example:
+                - product_id: 1
+                  sku: TSHIRT-001
+                  active: 1
+                  id_category: 2
+                  name: T-Shirt CsBe
+                  image: ''
+                  description: Schwarzes Baumwoll-T-Shirt mit Logo.
+                  price: 24.9
+                  stock: 25
+                - product_id: 3
+                  sku: STICKER-001
+                  active: 0
+                  id_category: null
+                  name: Sticker-Set
+                  image: ''
+                  description: Noch nicht im Shop gelistet.
+                  price: 4.0
+                  stock: 100
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /product/{sku}:
+    parameters:
+      - $ref: '#/components/parameters/Sku'
+
+    put:
+      tags: [Produkte]
+      summary: Produkt erstellen oder ersetzen
+      description: |
+        Speichert das Produkt unter der SKU aus der URL.
+
+        - Gibt es noch kein Produkt mit dieser SKU, wird es erstellt (`201`).
+        - Gibt es das Produkt schon, wird es vollständig mit den neuen Daten
+          ersetzt (`200`).
+
+        Alle Felder im Body sind Pflicht. `id_category` darf `null` sein,
+        dann ist das Produkt keiner Kategorie zugeordnet (nicht gelistet).
+        Unbekannte Felder werden ignoriert.
+      operationId: createOrUpdateProduct
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductInput'
+            example:
+              active: 1
+              id_category: 1
+              name: CsBe-Logo
+              image: https://www.csbe.ch/resources/themes/csbe/images/logo.svg?m=1595406300
+              description: Kaufen Sie jetzt das tolle Logo der CsBe!
+              price: 39999.95
+              stock: 3
+      responses:
+        '200':
+          description: Bestehendes Produkt wurde ersetzt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+              examples:
+                updated:
+                  $ref: '#/components/examples/CsbeLogo'
+        '201':
+          description: Neues Produkt wurde erstellt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+              examples:
+                created:
+                  $ref: '#/components/examples/CsbeLogo'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Die angegebene Kategorie existiert nicht
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Category does not exist
+                details:
+                  id_category: No category with id 999
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+    get:
+      tags: [Produkte]
+      summary: Ein Produkt lesen
+      description: Gibt das Produkt mit der angegebenen SKU zurück.
+      operationId: getProduct
+      responses:
+        '200':
+          description: Das gesuchte Produkt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+              examples:
+                found:
+                  $ref: '#/components/examples/CsbeLogo'
+        '400':
+          $ref: '#/components/responses/InvalidSku'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/ProductNotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+    delete:
+      tags: [Produkte]
+      summary: Ein Produkt löschen
+      description: Löscht das Produkt mit der angegebenen SKU endgültig.
+      operationId: deleteProduct
+      responses:
+        '204':
+          description: Produkt wurde gelöscht (kein Inhalt)
+        '400':
+          $ref: '#/components/responses/InvalidSku'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/ProductNotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /categories:
+    get:
+      tags: [Kategorien]
+      summary: Alle Kategorien auflisten
+      description: Gibt alle Kategorien zurück, sortiert nach `category_id`.
+      operationId: listCategories
+      responses:
+        '200':
+          description: Liste aller Kategorien (leer, wenn keine vorhanden sind)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Category'
+              example:
+                - category_id: 1
+                  active: 1
+                  name: Allgemein
+                - category_id: 2
+                  active: 1
+                  name: Bekleidung
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /category:
+    post:
+      tags: [Kategorien]
+      summary: Kategorie erstellen
+      description: |
+        Legt eine neue Kategorie an. `active` und `name` sind Pflicht.
+        Die `category_id` vergibt die Datenbank.
+      operationId: createCategory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryInput'
+            example:
+              active: 1
+              name: Firmen-Logos
+      responses:
+        '201':
+          description: Kategorie wurde erstellt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+              example:
+                category_id: 3
+                active: 1
+                name: Firmen-Logos
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /category/{category_id}:
+    parameters:
+      - $ref: '#/components/parameters/CategoryId'
+
+    patch:
+      tags: [Kategorien]
+      summary: Kategorie teilweise ändern
+      description: |
+        Ändert nur die mitgeschickten Felder. Mindestens eines von `active`
+        oder `name` muss vorhanden sein. Unbekannte Felder werden ignoriert.
+      operationId: updateCategory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryPatch'
+            example:
+              active: 0
+              name: Tolle Firmen-Logos
+      responses:
+        '200':
+          description: Kategorie wurde geändert, zurück kommt der neue Stand
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+              example:
+                category_id: 1
+                active: 0
+                name: Tolle Firmen-Logos
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/CategoryNotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+    get:
+      tags: [Kategorien]
+      summary: Eine Kategorie lesen
+      description: Gibt die Kategorie mit der angegebenen ID zurück.
+      operationId: getCategory
+      responses:
+        '200':
+          description: Die gesuchte Kategorie
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+              example:
+                category_id: 1
+                active: 1
+                name: Firmen-Logos
+        '400':
+          $ref: '#/components/responses/InvalidCategoryId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/CategoryNotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+    delete:
+      tags: [Kategorien]
+      summary: Eine Kategorie löschen
+      description: |
+        Löscht die Kategorie. Produkte, die dieser Kategorie zugeordnet waren,
+        bleiben erhalten und bekommen `id_category: null`.
+      operationId: deleteCategory
+      responses:
+        '204':
+          description: Kategorie wurde gelöscht (kein Inhalt)
+        '400':
+          $ref: '#/components/responses/InvalidCategoryId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/CategoryNotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: 'Token aus POST /authenticate, Header: Authorization: Bearer <token>'
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: token
+      description: Wird von POST /authenticate automatisch gesetzt
+
+  parameters:
+    Sku:
+      name: sku
+      in: path
+      required: true
+      description: |
+        SKU (Artikelnummer) des Produkts. Erlaubt sind Buchstaben, Ziffern,
+        Punkt, Binde- und Unterstrich, maximal 100 Zeichen.
+      schema:
+        type: string
+        maxLength: 100
+        pattern: '^[A-Za-z0-9._-]{1,100}$'
+      example: '12345678'
+    CategoryId:
+      name: category_id
+      in: path
+      required: true
+      description: ID der Kategorie (positive ganze Zahl)
+      schema:
+        type: integer
+        minimum: 1
+      example: 1
+
+  schemas:
+    Credentials:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          description: Benutzername
+          example: admin
+        password:
+          type: string
+          format: password
+          description: Passwort im Klartext (wird nur über die Verbindung geschickt, nie gespeichert)
+          example: 'sec!ReT423*&'
+
+    Token:
+      type: object
+      properties:
+        token:
+          type: string
+          description: Das JWT (HS256) mit den Claims iss, iat, exp, sub und username
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwOi8vbG9jYWxob3N0L2FwaS92MSJ9.abc123
+        token_type:
+          type: string
+          example: Bearer
+        expires_in:
+          type: integer
+          description: Gültigkeit in Sekunden
+          example: 3600
+
+    CategoryInput:
+      type: object
+      required: [active, name]
+      properties:
+        active:
+          type: integer
+          enum: [0, 1]
+          description: 1 = aktiv, 0 = inaktiv
+          example: 1
+        name:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: Name der Kategorie
+          example: Firmen-Logos
+
+    CategoryPatch:
+      type: object
+      description: Wie CategoryInput, aber alle Felder optional (mindestens eines nötig)
+      minProperties: 1
+      properties:
+        active:
+          type: integer
+          enum: [0, 1]
+          example: 0
+        name:
+          type: string
+          minLength: 1
+          maxLength: 500
+          example: Tolle Firmen-Logos
+
+    Category:
+      description: Kategorie, wie sie die API zurückgibt (Request-Felder plus category_id)
+      allOf:
+        - type: object
+          required: [category_id]
+          properties:
+            category_id:
+              type: integer
+              description: Primärschlüssel, wird von der Datenbank vergeben
+              example: 1
+        - $ref: '#/components/schemas/CategoryInput'
+
+    ProductInput:
+      type: object
+      required: [active, id_category, name, image, description, price, stock]
+      properties:
+        active:
+          type: integer
+          enum: [0, 1]
+          description: 1 = aktiv, 0 = inaktiv
+          example: 1
+        id_category:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: category_id der zugehörigen Kategorie oder null (nicht gelistet)
+          example: 1
+        name:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: Produktname
+          example: CsBe-Logo
+        image:
+          type: string
+          maxLength: 1000
+          description: URL des Produktbilds oder leerer Text
+          example: https://www.csbe.ch/resources/themes/csbe/images/logo.svg?m=1595406300
+        description:
+          type: string
+          description: Beschreibung des Produkts
+          example: Kaufen Sie jetzt das tolle Logo der CsBe!
+        price:
+          type: number
+          minimum: 0
+          description: Preis mit höchstens zwei Nachkommastellen
+          example: 39999.95
+        stock:
+          type: integer
+          minimum: 0
+          description: Lagerbestand
+          example: 3
+
+    Product:
+      description: Produkt, wie es die API zurückgibt (Request-Felder plus product_id und sku)
+      allOf:
+        - type: object
+          required: [product_id, sku]
+          properties:
+            product_id:
+              type: integer
+              description: Primärschlüssel, wird von der Datenbank vergeben
+              example: 4
+            sku:
+              type: string
+              maxLength: 100
+              description: Artikelnummer, entspricht dem Wert aus der URL
+              example: '12345678'
+        - $ref: '#/components/schemas/ProductInput'
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: Kurze Beschreibung des Fehlers
+          example: Product not found
+        details:
+          type: object
+          description: Nur bei Validierungsfehlern, eine Meldung pro Feld
+          additionalProperties:
+            type: string
+
+  examples:
+    CsbeLogo:
+      summary: Produkt CsBe-Logo
+      value:
+        product_id: 4
+        sku: '12345678'
+        active: 1
+        id_category: 1
+        name: CsBe-Logo
+        image: https://www.csbe.ch/resources/themes/csbe/images/logo.svg?m=1595406300
+        description: Kaufen Sie jetzt das tolle Logo der CsBe!
+        price: 39999.95
+        stock: 3
+
+  responses:
+    BadRequest:
+      description: Ungültiger Request (kein gültiges JSON oder Validierungsfehler)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            validation:
+              summary: Validierungsfehler
+              value:
+                error: Invalid request data
+                details:
+                  active: Must be 0 or 1
+                  name: Must be a non-empty string
+            invalidJson:
+              summary: Kein gültiges JSON
+              value:
+                error: Request body must be a valid JSON object
+    Unauthorized:
+      description: Kein Token mitgeschickt, oder das Token ist ungültig bzw. abgelaufen
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            missing:
+              summary: Kein Token
+              value:
+                error: Authentication required
+            invalid:
+              summary: Ungültiges oder abgelaufenes Token
+              value:
+                error: Invalid or expired token
+    InvalidSku:
+      description: Die SKU in der URL enthält ungültige Zeichen oder ist zu lang
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: Invalid sku, allowed are letters, digits, ".", "-" and "_" (max. 100 characters)
+    InvalidCategoryId:
+      description: Die category_id in der URL ist keine positive ganze Zahl
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: Invalid category_id, must be a positive integer
+    ProductNotFound:
+      description: Es gibt kein Produkt mit dieser SKU
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: Product not found
+    CategoryNotFound:
+      description: Es gibt keine Kategorie mit dieser ID
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: Category not found
+    ServerError:
+      description: Unerwarteter Fehler auf dem Server (z. B. Datenbank nicht erreichbar)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: Internal server error
