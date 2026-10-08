@@ -1,0 +1,18 @@
+# Alle Requests unter /api/v1/ an index.php weiterleiten.
+# Beispiel: /api/v1/product/12345678 wird intern zu /api/v1/index.php,
+# die ursprüngliche URL bleibt in $_SERVER['REQUEST_URI'] erhalten.
+
+RewriteEngine On
+
+# Den Authorization-Header an PHP weitergeben (Apache verwirft ihn sonst teilweise).
+RewriteCond %{HTTP:Authorization} .
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+# Alles an index.php weiterleiten, auch Aufrufe einzelner PHP-Dateien wie
+# controllers/ProductController.php. So ist index.php der einzige Einstieg.
+# Die Bedingung verhindert, dass index.php endlos auf sich selbst zeigt.
+RewriteCond %{REQUEST_URI} !/index\.php$
+RewriteRule ^ index.php [QSA,L]
+
+# Der Ordner soll nicht als Dateiliste angezeigt werden.
+Options -Indexes
