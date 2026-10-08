@@ -1,0 +1,14 @@
+# Lokale Konfiguration mit Passwörtern oder eigenem JWT-Secret
+config/config.local.php
+
+# Dateien vom Mac
+.DS_Store
+
+# Einstellungen von VS Code 
+.vscode/
+
+# Werkzeuge
+phpcs.phar
+
+# Bruno-Collection
+*.zip
