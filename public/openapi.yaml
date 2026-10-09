@@ -1,4 +1,8 @@
 openapi: 3.0.3
+
+info:
+  title: Shop REST API
+  
 servers:
   - url: http://localhost/api/v1
     description: Lokale XAMPP-Installation

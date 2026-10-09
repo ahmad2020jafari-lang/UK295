@@ -14,7 +14,6 @@ CREATE TABLE category (
     PRIMARY KEY (category_id)
 ) ENGINE = InnoDB;
 
--- Tabelle product (gemäss Datenmodell)
 -- id_category darf NULL sein: Produkt ohne Kategorie = nicht gelistet.
 -- Wird eine Kategorie gelöscht, verlieren die Produkte nur die Zuordnung.
 CREATE TABLE product (
