@@ -1,38 +1,4 @@
 openapi: 3.0.3
-
-info:
-  title: Shop REST API
-  version: 1.0.0
-  description: |
-    REST API zur Verwaltung von Produkten und Kategorien eines Online-Shops
-    (Projekt üK295 LB1).
-
-    **Authentifizierung**
-
-    Alle Endpoints ausser `POST /authenticate` sind mit einem JSON Web Token (JWT)
-    geschützt. Ablauf:
-
-    1. `POST /authenticate` mit Benutzername und Passwort aufrufen.
-    2. Die Antwort enthält das Token im Feld `token`. Zusätzlich wird es als
-       HttpOnly-Cookie `token` gesetzt.
-    3. Bei allen weiteren Requests das Token als Header
-       `Authorization: Bearer <token>` mitschicken. Alternativ reicht das Cookie,
-       das Browser und Bruno automatisch mitsenden.
-
-    Ein Token ist eine Stunde gültig.
-
-    **Datenformat**
-
-    Requests und Responses verwenden JSON (`Content-Type: application/json`).
-    Die Typen werden streng geprüft: `"stock": 3` ist gültig, `"stock": "3"` nicht.
-
-    **Fehler**
-
-    Fehler haben immer die Form `{"error": "..."}`. Bei Validierungsfehlern
-    kommt zusätzlich `details` mit einer Meldung pro Feld dazu.
-    Wird ein bekannter Pfad mit einer falschen Methode aufgerufen, antwortet die
-    API mit `405 Method Not Allowed`, unbekannte Pfade mit `404 Not Found`.
-
 servers:
   - url: http://localhost/api/v1
     description: Lokale XAMPP-Installation
